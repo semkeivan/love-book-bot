@@ -1,0 +1,26 @@
+[app]
+name = "bible-love-bot"
+primary_region = "sin"
+
+[build]
+dockerfile = "Dockerfile"
+
+[env]
+WEBHOOK_PORT = "8080"
+DATA_DIR = "/data"
+
+[[services]]
+internal_port = 8080
+protocol = "tcp"
+
+[[services.ports]]
+handlers = ["http"]
+port = 80
+
+[[services.ports]]
+handlers = ["tls", "http"]
+port = 443
+
+[mounts]
+source = "bot_data"
+destination = "/data"
