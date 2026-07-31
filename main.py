@@ -83,35 +83,30 @@ async def main() -> None:
         return web.Response(text=f"ok, delivered to {uid}, already_paid={already}")
 
     async def admin_all_users(request: web.Request) -> web.Response:
-        import json, sqlite3
-        from config import ADMIN_IDS, DB_PATH
+        import json
+        from database.crud import get_all_users
+        from config import ADMIN_IDS
         if request.rel_url.query.get("token", "") != str(ADMIN_IDS[0]):
             return web.Response(status=403, text="forbidden")
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute("SELECT id, username, first_name, phone, stage, paid_at, joined_at FROM users ORDER BY joined_at DESC").fetchall()
-        return web.Response(text=json.dumps([dict(r) for r in rows], ensure_ascii=False, default=str), content_type="application/json")
+        rows = await get_all_users()
+        return web.Response(text=json.dumps(rows, ensure_ascii=False, default=str), content_type="application/json")
 
     async def admin_pending(request: web.Request) -> web.Response:
-        import json, sqlite3
-        from config import ADMIN_IDS, DB_PATH
+        import json
+        from database.crud import get_pending_payments
+        from config import ADMIN_IDS
         if request.rel_url.query.get("token", "") != str(ADMIN_IDS[0]):
             return web.Response(status=403, text="forbidden")
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute("SELECT * FROM pending_payments ORDER BY created_at DESC").fetchall()
-        return web.Response(text=json.dumps([dict(r) for r in rows], ensure_ascii=False, default=str), content_type="application/json")
+        rows = await get_pending_payments()
+        return web.Response(text=json.dumps(rows, ensure_ascii=False, default=str), content_type="application/json")
 
     async def admin_warmup(request: web.Request) -> web.Response:
-        import sqlite3
-        from config import ADMIN_IDS, DB_PATH
+        from database.crud import get_unpaid_users
+        from config import ADMIN_IDS
         if request.rel_url.query.get("token", "") != str(ADMIN_IDS[0]):
             return web.Response(status=403, text="forbidden")
-        with sqlite3.connect(DB_PATH) as conn:
-            rows = conn.execute(
-                "SELECT id FROM users WHERE paid_at IS NULL AND id > 0"
-            ).fetchall()
-        user_ids = [r[0] for r in rows]
+        unpaid = await get_unpaid_users()
+        user_ids = [u["id"] for u in unpaid if u["id"] > 0]
         text = (
             "Привет 👋\n\n"
             "Ты заходил в наш бот — значит, что-то тебя задело. Может, вопрос о любви, "
@@ -132,16 +127,15 @@ async def main() -> None:
         return web.Response(text=f"sent={sent} failed={failed}")
 
     async def admin_broadcast_photo(request: web.Request) -> web.Response:
-        import sqlite3
         from aiogram.types import FSInputFile
-        from config import ADMIN_IDS, DB_PATH
+        from database.crud import get_all_user_ids
+        from config import ADMIN_IDS
         if request.rel_url.query.get("token", "") != str(ADMIN_IDS[0]):
             return web.Response(status=403, text="forbidden")
         photo_path = request.rel_url.query.get("photo", "assets/bible_infographic.jpeg")
         caption = request.rel_url.query.get("caption", "")
-        with sqlite3.connect(DB_PATH) as conn:
-            rows = conn.execute("SELECT id FROM users WHERE id > 0").fetchall()
-        user_ids = [r[0] for r in rows]
+        all_ids = await get_all_user_ids()
+        user_ids = [uid for uid in all_ids if uid > 0]
         sent, failed = 0, 0
         file_id = None
         for uid in user_ids:
@@ -159,13 +153,12 @@ async def main() -> None:
         return web.Response(text=f"sent={sent} failed={failed}")
 
     async def admin_campaign(request: web.Request) -> web.Response:
-        import sqlite3
-        from config import ADMIN_IDS, DB_PATH
+        from database.crud import get_all_user_ids
+        from config import ADMIN_IDS
         if request.rel_url.query.get("token", "") != str(ADMIN_IDS[0]):
             return web.Response(status=403, text="forbidden")
-        with sqlite3.connect(DB_PATH) as conn:
-            rows = conn.execute("SELECT id FROM users WHERE id > 0").fetchall()
-        user_ids = [r[0] for r in rows]
+        all_ids = await get_all_user_ids()
+        user_ids = [uid for uid in all_ids if uid > 0]
         text = (
             "Привет! 👋\n\n"
             "Скажи, успел(а) уже прочитать книгу? Как тебе? Было бы интересно услышать 🙂\n\n"
@@ -203,19 +196,15 @@ async def main() -> None:
     app.router.add_get("/admin/pending", admin_pending)
     app.router.add_get("/admin/users", admin_all_users)
     async def admin_message_log(request: web.Request) -> web.Response:
-        import json, sqlite3
-        from config import ADMIN_IDS, DB_PATH
+        import json
+        from database.crud import get_reply_stats
+        from config import ADMIN_IDS
         if request.rel_url.query.get("token", "") != str(ADMIN_IDS[0]):
             return web.Response(status=403, text="forbidden")
         hours = int(request.rel_url.query.get("hours", 720))
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                "SELECT * FROM message_log WHERE received_at >= datetime('now', ? || ' hours') ORDER BY received_at DESC",
-                (f"-{hours}",)
-            ).fetchall()
+        rows = await get_reply_stats(hours=hours)
         return web.Response(
-            text=json.dumps([dict(r) for r in rows], ensure_ascii=False, default=str),
+            text=json.dumps(rows, ensure_ascii=False, default=str),
             content_type="application/json"
         )
 
@@ -223,6 +212,11 @@ async def main() -> None:
     app.router.add_get("/admin/broadcast_photo", admin_broadcast_photo)
     app.router.add_get("/admin/campaign", admin_campaign)
     app.router.add_get("/admin/message_log", admin_message_log)
+
+    async def health(request: web.Request) -> web.Response:
+        return web.Response(text="ok")
+
+    app.router.add_get("/health", health)
 
     # Telegram webhook
     webhook_url = f"{PUBLIC_URL}{TELEGRAM_WEBHOOK_PATH}"

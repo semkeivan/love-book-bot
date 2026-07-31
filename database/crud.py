@@ -159,6 +159,38 @@ def _get_unpaid_users():
         return [dict(r) for r in cur.fetchall()]
 
 
+def _get_all_users():
+    with _db() as conn:
+        conn.row_factory = sqlite3.Row
+        cur = conn.execute(
+            "SELECT id, username, first_name, phone, stage, paid_at, joined_at FROM users ORDER BY joined_at DESC"
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def _get_funnel_stats():
+    with _db() as conn:
+        total = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        paid = conn.execute("SELECT COUNT(*) FROM users WHERE paid_at IS NOT NULL").fetchone()[0]
+        new_today = conn.execute(
+            "SELECT COUNT(*) FROM users WHERE date(joined_at) = date('now')"
+        ).fetchone()[0]
+        paid_today = conn.execute(
+            "SELECT COUNT(*) FROM users WHERE date(paid_at) = date('now')"
+        ).fetchone()[0]
+        conn.row_factory = sqlite3.Row
+        stages = conn.execute(
+            "SELECT stage, COUNT(*) as cnt FROM users WHERE paid_at IS NULL GROUP BY stage ORDER BY cnt DESC"
+        ).fetchall()
+        return {
+            "total": total,
+            "paid": paid,
+            "new_today": new_today,
+            "paid_today": paid_today,
+            "stages": [dict(r) for r in stages],
+        }
+
+
 def _reset_drip(user_id: int) -> None:
     with _db() as conn:
         conn.execute(
@@ -270,6 +302,12 @@ async def get_paid_users():
 
 async def get_unpaid_users():
     return await asyncio.to_thread(_get_unpaid_users)
+
+async def get_all_users():
+    return await asyncio.to_thread(_get_all_users)
+
+async def get_funnel_stats():
+    return await asyncio.to_thread(_get_funnel_stats)
 
 async def reset_drip(user_id: int):
     await asyncio.to_thread(_reset_drip, user_id)
