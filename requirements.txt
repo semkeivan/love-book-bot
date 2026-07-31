@@ -3,4 +3,4 @@ aiohttp>=3.9.0
 apscheduler==3.10.4
 python-dotenv==1.0.1
 pyngrok>=7.0.0
-libsql-experimental>=0.3.0
+libsql-experimental>=0.0.50

@@ -6,7 +6,7 @@ from aiogram.types import (
     ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove,
 )
 
-from config import PDF_PATH
+from config import PDF_PATH, PDF_FILE_ID
 from database.crud import has_paid, mark_user_paid, save_phone, pop_pending_payment_by_phone
 from keyboards.main import buy_offer_keyboard, payment_keyboard, community_keyboard
 from texts.messages import BUY_OFFER_TEXT, POST_PURCHASE_TEXT
@@ -88,9 +88,11 @@ async def check_payment(callback: CallbackQuery, bot: Bot) -> None:
 
 async def deliver_book(bot: Bot, user_id: int) -> None:
     try:
+        # Используем file_id с серверов Telegram (приоритет) или локальный файл
+        document = PDF_FILE_ID if PDF_FILE_ID else FSInputFile(PDF_PATH)
         await bot.send_document(
             chat_id=user_id,
-            document=FSInputFile(PDF_PATH),
+            document=document,
             caption="📎 Вот твоя книга. Сохрани её — она никуда не денется.",
         )
         await asyncio.sleep(60)

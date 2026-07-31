@@ -1,41 +1,146 @@
+import json
 import sqlite3
 import asyncio
+import urllib.request
+import urllib.error
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from config import DB_PATH, TURSO_URL, TURSO_TOKEN
 
 
-def _run(fn):
-    """Run sync sqlite function in thread pool to avoid blocking event loop."""
-    return asyncio.to_thread(fn)
+# ── Turso HTTP API ─────────────────────────────────────────────────────────────
 
+def _turso_http_url():
+    url = TURSO_URL
+    if url.startswith("libsql://"):
+        url = "https://" + url[9:]
+    return url
+
+
+def _to_arg(v):
+    if v is None:
+        return {"type": "null", "value": None}
+    if isinstance(v, bool):
+        return {"type": "integer", "value": "1" if v else "0"}
+    if isinstance(v, int):
+        return {"type": "integer", "value": str(v)}
+    if isinstance(v, float):
+        return {"type": "real", "value": str(v)}
+    return {"type": "text", "value": str(v)}
+
+
+def _from_cell(cell):
+    typ = cell.get("type")
+    val = cell.get("value")
+    if typ == "null" or val is None:
+        return None
+    if typ == "integer":
+        return int(val)
+    if typ == "real":
+        return float(val)
+    return val
+
+
+def _turso_exec(sql, params=()):
+    """Execute one SQL statement via Turso HTTP API. Returns (cols, rows)."""
+    stmt = {"sql": sql}
+    if params:
+        stmt["args"] = [_to_arg(v) for v in params]
+
+    body = json.dumps({
+        "requests": [
+            {"type": "execute", "stmt": stmt},
+            {"type": "close"},
+        ]
+    }).encode()
+
+    req = urllib.request.Request(
+        f"{_turso_http_url()}/v2/pipeline",
+        data=body,
+        headers={
+            "Authorization": f"Bearer {TURSO_TOKEN}",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"Turso HTTP {e.code}: {e.read().decode()}") from e
+
+    results = data.get("results", [])
+    if results and results[0].get("type") == "error":
+        raise RuntimeError(f"Turso SQL error: {results[0].get('error')}")
+    if not results or results[0].get("type") != "ok":
+        return [], []
+
+    res = results[0].get("response", {}).get("result", {})
+    cols = [c["name"] for c in res.get("cols", [])]
+    rows = [[_from_cell(cell) for cell in raw] for raw in res.get("rows", [])]
+    return cols, rows
+
+
+class _TursoCursor:
+    def __init__(self, cols, rows, as_dicts=False):
+        self._cols = cols
+        self._rows = rows
+        self._as_dicts = as_dicts
+        self._idx = 0
+
+    def _wrap(self, row):
+        return dict(zip(self._cols, row)) if self._as_dicts else row
+
+    def fetchone(self):
+        if self._idx >= len(self._rows):
+            return None
+        r = self._rows[self._idx]
+        self._idx += 1
+        return self._wrap(r)
+
+    def fetchall(self):
+        rows = [self._wrap(r) for r in self._rows[self._idx:]]
+        self._idx = len(self._rows)
+        return rows
+
+
+class _TursoConn:
+    """Mimics sqlite3.Connection using Turso HTTP API."""
+    row_factory = None
+
+    def execute(self, sql, params=()):
+        cols, rows = _turso_exec(sql, params)
+        return _TursoCursor(cols, rows, as_dicts=(self.row_factory is not None))
+
+    def commit(self):
+        pass  # HTTP API is auto-commit
+
+    def rollback(self):
+        pass
+
+    def close(self):
+        pass
+
+
+# ── Connection factory ─────────────────────────────────────────────────────────
 
 @contextmanager
 def _db():
-    """Открывает соединение с Turso (если настроен) или локальным SQLite."""
     if TURSO_URL and TURSO_TOKEN:
+        conn = _TursoConn()
         try:
-            import libsql_experimental as libsql
-            conn = libsql.connect(str(DB_PATH), sync_url=TURSO_URL, auth_token=TURSO_TOKEN)
-            conn.sync()
-        except ImportError:
-            conn = sqlite3.connect(str(DB_PATH))
+            yield conn
+        finally:
+            pass
     else:
         conn = sqlite3.connect(str(DB_PATH))
-
-    try:
-        yield conn
-        conn.commit()
-        if TURSO_URL and TURSO_TOKEN:
-            try:
-                conn.sync()
-            except Exception:
-                pass
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
 
 # ── sync helpers (run inside thread) ──────────────────────────────────────────
@@ -122,7 +227,6 @@ def _save_pending_payment(phone: str, email: str, order_id: str) -> None:
 
 
 def _pop_pending_payment_by_phone(phone: str):
-    """Возвращает order_id и удаляет запись если есть."""
     phone = phone.replace(" ", "").replace("-", "")
     if not phone.startswith("+"):
         phone = "+" + phone
@@ -200,7 +304,6 @@ def _reset_drip(user_id: int) -> None:
 
 
 def _get_drip_pending(step: int, min_hours: float):
-    """Возвращает пользователей на шаге step, которые ждут >= min_hours с drip_started_at."""
     with _db() as conn:
         conn.row_factory = sqlite3.Row
         cur = conn.execute(
@@ -234,7 +337,6 @@ def _log_message(user_id: int, username: str, first_name: str, text: str) -> Non
 
 
 def _get_reply_stats(hours: int = 48):
-    from datetime import datetime, timedelta
     cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
     with _db() as conn:
         conn.row_factory = sqlite3.Row

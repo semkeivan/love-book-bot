@@ -1,0 +1,50 @@
+name: Run Bot 24/7
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'   # каждые 6 часов
+  workflow_dispatch:          # ручной запуск
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 359      # чуть меньше лимита GitHub (6 часов = 360 мин)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install aiogram==3.15.0 aiohttp>=3.9.0 apscheduler==3.10.4 python-dotenv==1.0.1 pyngrok>=7.0.0
+
+      - name: Start ngrok tunnel
+        env:
+          NGROK_TOKEN: ${{ secrets.NGROK_TOKEN }}
+        run: |
+          python3 -c "
+          import os, time
+          from pyngrok import ngrok, conf
+          conf.get_default().auth_token = os.environ['NGROK_TOKEN']
+          tunnel = ngrok.connect(8080, domain='relearn-whiff-pusher.ngrok-free.dev')
+          print('ngrok connected:', tunnel.public_url)
+          time.sleep(99999)
+          " &
+          sleep 4
+
+      - name: Run bot (359 minutes max)
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          PAYMENT_SECRET: ${{ secrets.PAYMENT_SECRET }}
+          ADMIN_IDS: ${{ secrets.ADMIN_IDS }}
+          NGROK_TOKEN: ${{ secrets.NGROK_TOKEN }}
+          TURSO_URL: ${{ secrets.TURSO_URL }}
+          TURSO_TOKEN: ${{ secrets.TURSO_TOKEN }}
+          PUBLIC_URL: https://relearn-whiff-pusher.ngrok-free.dev
+          WEBHOOK_PORT: '8080'
+        run: timeout 21540 python main.py || true

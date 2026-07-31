@@ -4,3 +4,7 @@ __pycache__/
 *.pyc
 .DS_Store
 seed_data.sql
+assets/
+bot.log
+bot.pid
+.playwright-mcp/

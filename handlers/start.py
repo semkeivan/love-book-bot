@@ -3,7 +3,7 @@ from aiogram import Router, Bot
 from aiogram.filters import CommandStart
 from aiogram.types import Message, FSInputFile
 
-from config import COVER_PATH
+from config import COVER_PATH, COVER_FILE_ID
 from database.crud import get_or_create_user, has_paid, mark_user_paid, reset_drip
 from handlers.payment import deliver_book
 from keyboards.main import main_keyboard
@@ -31,9 +31,10 @@ async def cmd_start(message: Message, bot: Bot) -> None:
 
     await reset_drip(user.id)
 
-    if COVER_PATH.exists():
+    photo = COVER_FILE_ID if COVER_FILE_ID else (FSInputFile(COVER_PATH) if COVER_PATH.exists() else None)
+    if photo:
         await message.answer_photo(
-            photo=FSInputFile(COVER_PATH),
+            photo=photo,
             caption=WELCOME_TEXT,
             reply_markup=main_keyboard(),
         )

@@ -14,6 +14,8 @@ PAYMENT_SECRET = os.getenv("PAYMENT_SECRET", "change_me")
 ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()]
 PDF_PATH = Path(__file__).parent / "assets" / "love_book.pdf"
 COVER_PATH = Path(__file__).parent / "assets" / "book_cover.jpg"
+PDF_FILE_ID = os.getenv("PDF_FILE_ID", "")
+COVER_FILE_ID = os.getenv("COVER_FILE_ID", "")
 # На fly.io — /data (persistent volume), локально — рядом с проектом
 _data_dir = Path(os.getenv("DATA_DIR", str(Path(__file__).parent)))
 DB_PATH = _data_dir / "buyers.db"
