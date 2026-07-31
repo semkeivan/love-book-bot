@@ -159,21 +159,20 @@ async def main() -> None:
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>База лидов — bible_love_bot</title>
 <style>
-:root{{color-scheme:light dark}}
-body{{font-family:-apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:16px;background:#f5f5f7;color:#111}}
-@media(prefers-color-scheme:dark){{body{{background:#1c1c1e;color:#eee}}table{{background:#2c2c2e}}th{{background:#333}}}}
+:root{{color-scheme:light}}
+body{{font-family:-apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:16px;background:#f2f2f4;color:#111}}
+h1,h2,h3{{color:#111}}
 h1{{font-size:20px}}
 .cards{{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}}
 .card{{background:#fff;border-radius:12px;padding:14px 18px;min-width:120px;box-shadow:0 1px 3px rgba(0,0,0,.1)}}
-@media(prefers-color-scheme:dark){{.card{{background:#2c2c2e}}}}
-.card .n{{font-size:28px;font-weight:700}}
-.card .l{{font-size:13px;opacity:.65}}
+.card .n{{font-size:28px;font-weight:700;color:#111}}
+.card .l{{font-size:13px;color:#555}}
 h3{{margin-top:28px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:16px}}
 .cnt{{background:#0a84ff;color:#fff;border-radius:20px;padding:1px 10px;font-size:14px}}
-.btn{{font-size:13px;background:#34c759;color:#fff;padding:5px 12px;border-radius:8px;text-decoration:none;font-weight:600}}
-table{{border-collapse:collapse;width:100%;background:#fff;border-radius:10px;overflow:hidden;margin-top:8px;font-size:14px}}
-th,td{{text-align:left;padding:8px 12px;border-bottom:1px solid rgba(128,128,128,.2)}}
-th{{background:#eee;font-size:13px}}
+.btn{{font-size:13px;background:#2ea44f;color:#fff;padding:5px 12px;border-radius:8px;text-decoration:none;font-weight:600}}
+table{{border-collapse:collapse;width:100%;background:#fff;border-radius:10px;overflow:hidden;margin-top:8px;font-size:14px;color:#111}}
+th,td{{text-align:left;padding:8px 12px;border-bottom:1px solid #e2e2e5;color:#111}}
+th{{background:#eaeaec;font-size:13px;color:#111}}
 .wrap{{overflow-x:auto}}
 </style></head><body>
 <h1>📊 База лидов — @bible_love_bot</h1>
