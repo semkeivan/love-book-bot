@@ -100,12 +100,106 @@ async def main() -> None:
         rows = await get_pending_payments()
         return web.Response(text=json.dumps(rows, ensure_ascii=False, default=str), content_type="application/json")
 
+    async def admin_dashboard(request: web.Request) -> web.Response:
+        import html as _html
+        from database.crud import get_all_users
+        from config import ADMIN_IDS
+        token = request.rel_url.query.get("token", "")
+        if token != str(ADMIN_IDS[0]):
+            return web.Response(status=403, text="forbidden")
+        users = await get_all_users()
+        paid = [u for u in users if u.get("paid_at")]
+        unpaid = [u for u in users if not u.get("paid_at")]
+        total = len(users) or 1
+
+        stage_labels = {
+            "asked_q5": "🔥 Дошли до вопроса 5 — почти купили",
+            "asked_q4": "Вопрос 4",
+            "asked_q3": "Вопрос 3",
+            "asked_q2": "Вопрос 2",
+            "asked_q1": "Вопрос 1",
+            "new": "Только нажали /start — не вовлеклись",
+        }
+        order = ["asked_q5", "asked_q4", "asked_q3", "asked_q2", "asked_q1", "new"]
+
+        def row(u):
+            name = _html.escape(u.get("first_name") or "(без имени)")
+            un = ("@" + _html.escape(u["username"])) if u.get("username") else "—"
+            ph = _html.escape(u.get("phone") or "—")
+            jd = str(u.get("joined_at") or "")[:10]
+            return f"<tr><td>{name}</td><td>{un}</td><td>{ph}</td><td>{jd}</td></tr>"
+
+        blocks = []
+        from collections import defaultdict
+        by_stage = defaultdict(list)
+        for u in unpaid:
+            by_stage[u.get("stage", "new")].append(u)
+        for s in order:
+            group = by_stage.get(s)
+            if not group:
+                continue
+            group.sort(key=lambda u: str(u.get("joined_at") or ""), reverse=True)
+            rows = "".join(row(u) for u in group)
+            blocks.append(
+                f'<h3>{stage_labels.get(s, s)} <span class="cnt">{len(group)}</span> '
+                f'<a class="btn" href="/admin/warmup?token={token}&stage={s}" '
+                f'onclick="return confirm(\'Отправить рассылку {len(group)} чел. на стадии {s}?\')">✉ Рассылка этой группе</a></h3>'
+                f'<table><thead><tr><th>Имя</th><th>Username</th><th>Телефон</th><th>Вошёл</th></tr></thead>'
+                f'<tbody>{rows}</tbody></table>'
+            )
+        paid.sort(key=lambda u: str(u.get("paid_at") or ""), reverse=True)
+        paid_rows = "".join(
+            f"<tr><td>{_html.escape(u.get('first_name') or '')}</td>"
+            f"<td>{('@'+_html.escape(u['username'])) if u.get('username') else '—'}</td>"
+            f"<td>{str(u.get('paid_at') or '')[:16]}</td></tr>"
+            for u in paid
+        )
+        conv = round(100 * len(paid) / total)
+        page = f"""<!doctype html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>База лидов — bible_love_bot</title>
+<style>
+:root{{color-scheme:light dark}}
+body{{font-family:-apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:16px;background:#f5f5f7;color:#111}}
+@media(prefers-color-scheme:dark){{body{{background:#1c1c1e;color:#eee}}table{{background:#2c2c2e}}th{{background:#333}}}}
+h1{{font-size:20px}}
+.cards{{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}}
+.card{{background:#fff;border-radius:12px;padding:14px 18px;min-width:120px;box-shadow:0 1px 3px rgba(0,0,0,.1)}}
+@media(prefers-color-scheme:dark){{.card{{background:#2c2c2e}}}}
+.card .n{{font-size:28px;font-weight:700}}
+.card .l{{font-size:13px;opacity:.65}}
+h3{{margin-top:28px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:16px}}
+.cnt{{background:#0a84ff;color:#fff;border-radius:20px;padding:1px 10px;font-size:14px}}
+.btn{{font-size:13px;background:#34c759;color:#fff;padding:5px 12px;border-radius:8px;text-decoration:none;font-weight:600}}
+table{{border-collapse:collapse;width:100%;background:#fff;border-radius:10px;overflow:hidden;margin-top:8px;font-size:14px}}
+th,td{{text-align:left;padding:8px 12px;border-bottom:1px solid rgba(128,128,128,.2)}}
+th{{background:#eee;font-size:13px}}
+.wrap{{overflow-x:auto}}
+</style></head><body>
+<h1>📊 База лидов — @bible_love_bot</h1>
+<div class="cards">
+<div class="card"><div class="n">{len(users)}</div><div class="l">Всего лидов</div></div>
+<div class="card"><div class="n">{len(paid)}</div><div class="l">Оплатили</div></div>
+<div class="card"><div class="n">{len(unpaid)}</div><div class="l">Не оплатили</div></div>
+<div class="card"><div class="n">{conv}%</div><div class="l">Конверсия</div></div>
+</div>
+<h2>❌ Не оплатили — по стадиям</h2>
+<div class="wrap">{''.join(blocks)}</div>
+<h2 style="margin-top:32px">✅ Оплатили ({len(paid)})</h2>
+<div class="wrap"><table><thead><tr><th>Имя</th><th>Username</th><th>Когда оплатил</th></tr></thead><tbody>{paid_rows}</tbody></table></div>
+<p style="opacity:.5;font-size:12px;margin-top:24px">Данные живые, из облачной базы Turso. Обнови страницу — увидишь актуальное.</p>
+</body></html>"""
+        return web.Response(text=page, content_type="text/html")
+
     async def admin_warmup(request: web.Request) -> web.Response:
         from database.crud import get_unpaid_users
         from config import ADMIN_IDS
         if request.rel_url.query.get("token", "") != str(ADMIN_IDS[0]):
             return web.Response(status=403, text="forbidden")
+        stage_filter = request.rel_url.query.get("stage", "")
         unpaid = await get_unpaid_users()
+        if stage_filter:
+            unpaid = [u for u in unpaid if u.get("stage") == stage_filter]
         user_ids = [u["id"] for u in unpaid if u["id"] > 0]
         text = (
             "Привет 👋\n\n"
@@ -195,6 +289,7 @@ async def main() -> None:
     app.router.add_get("/admin/deliver", admin_deliver)
     app.router.add_get("/admin/pending", admin_pending)
     app.router.add_get("/admin/users", admin_all_users)
+    app.router.add_get("/admin/dashboard", admin_dashboard)
     async def admin_message_log(request: web.Request) -> web.Response:
         import json
         from database.crud import get_reply_stats
