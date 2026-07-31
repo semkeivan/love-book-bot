@@ -5,10 +5,15 @@ on:
     - cron: '0 */6 * * *'   # каждые 6 часов
   workflow_dispatch:          # ручной запуск
 
+# Не запускать несколько экземпляров одновременно (конфликт ngrok/Telegram)
+concurrency:
+  group: run-bot
+  cancel-in-progress: true
+
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 359      # чуть меньше лимита GitHub (6 часов = 360 мин)
+    timeout-minutes: 355      # чуть меньше лимита GitHub (6 часов = 360 мин)
 
     steps:
       - uses: actions/checkout@v4
@@ -20,8 +25,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
-          pip install aiogram==3.15.0 aiohttp>=3.9.0 apscheduler==3.10.4 python-dotenv==1.0.1 pyngrok>=7.0.0
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Start ngrok tunnel
         env:
@@ -35,9 +40,9 @@ jobs:
           print('ngrok connected:', tunnel.public_url)
           time.sleep(99999)
           " &
-          sleep 4
+          sleep 5
 
-      - name: Run bot (359 minutes max)
+      - name: Run bot (~6 hours, then workflow restarts it)
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           PAYMENT_SECRET: ${{ secrets.PAYMENT_SECRET }}
@@ -45,6 +50,8 @@ jobs:
           NGROK_TOKEN: ${{ secrets.NGROK_TOKEN }}
           TURSO_URL: ${{ secrets.TURSO_URL }}
           TURSO_TOKEN: ${{ secrets.TURSO_TOKEN }}
+          PDF_FILE_ID: ${{ secrets.PDF_FILE_ID }}
+          COVER_FILE_ID: ${{ secrets.COVER_FILE_ID }}
           PUBLIC_URL: https://relearn-whiff-pusher.ngrok-free.dev
           WEBHOOK_PORT: '8080'
-        run: timeout 21540 python main.py || true
+        run: timeout 21000 python main.py || true
