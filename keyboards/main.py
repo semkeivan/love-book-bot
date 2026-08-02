@@ -5,12 +5,8 @@ PAYFORM_BASE = "https://payform.ru/3cbQXFl/"
 
 
 def main_keyboard() -> InlineKeyboardMarkup:
+    # Только одна кнопка — покупка. Без выбора вопросов.
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔥 Почему любовь уходит — и можно ли её вернуть?", callback_data="q1")],
-        [InlineKeyboardButton(text="😤 Почему я срываюсь на тех, кого люблю?", callback_data="q2")],
-        [InlineKeyboardButton(text="💔 Как перестать нести в себе накопившиеся обиды?", callback_data="q3")],
-        [InlineKeyboardButton(text="🤔 Почему у других получается, а у меня нет?", callback_data="q4")],
-        [InlineKeyboardButton(text="🙏 Что значит — любить по-настоящему?", callback_data="q5")],
         [InlineKeyboardButton(text="💳 Купить книгу — 350 ₽", callback_data="buy")],
     ])
 
