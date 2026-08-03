@@ -1,0 +1,19 @@
+name: Daily Report
+
+on:
+  schedule:
+    - cron: '0 6 * * *'   # ежедневно в 06:00 UTC = 09:00 МСК
+  workflow_dispatch:        # можно запустить вручную для проверки
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Send daily report
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          ADMIN_IDS: ${{ secrets.ADMIN_IDS }}
+          TURSO_URL: ${{ secrets.TURSO_URL }}
+          TURSO_TOKEN: ${{ secrets.TURSO_TOKEN }}
+        run: python3 scripts/daily_report.py
