@@ -8,7 +8,7 @@ from aiogram.types import (
 
 from config import PDF_PATH, PDF_FILE_ID
 from database.crud import has_paid, mark_user_paid, save_phone, pop_pending_payment_by_phone
-from keyboards.main import buy_offer_keyboard, payment_keyboard, community_keyboard
+from keyboards.main import payment_keyboard, community_keyboard
 from texts.messages import BUY_OFFER_TEXT, POST_PURCHASE_TEXT
 
 router = Router()
@@ -26,10 +26,12 @@ def phone_keyboard() -> ReplyKeyboardMarkup:
 @router.callback_query(F.data == "buy")
 async def show_buy_offer(callback: CallbackQuery) -> None:
     await callback.answer()
-    if await has_paid(callback.from_user.id):
+    user_id = callback.from_user.id
+    if await has_paid(user_id):
         await callback.message.answer("Ты уже получил книгу 📖 Найди её выше в чате.")
         return
-    await callback.message.answer(BUY_OFFER_TEXT, reply_markup=buy_offer_keyboard())
+    # Сразу к оплате — без промежуточных шагов и без запроса телефона
+    await callback.message.answer(BUY_OFFER_TEXT, reply_markup=payment_keyboard(user_id))
 
 
 @router.callback_query(F.data == "pay_now")
@@ -39,9 +41,10 @@ async def pay_now(callback: CallbackQuery) -> None:
     if await has_paid(user_id):
         await callback.message.answer("Книга уже отправлена — найди её выше в чате 📖")
         return
+    # Прямая ссылка на оплату, без запроса телефона
     await callback.message.answer(
-        "Для автоматической доставки книги поделись номером — одна кнопка:",
-        reply_markup=phone_keyboard(),
+        "💳 Оплата — 350 ₽\n\nНажми «Оплатить» → введи карту — книга придёт сюда автоматически 📖",
+        reply_markup=payment_keyboard(user_id),
     )
 
 
@@ -79,10 +82,10 @@ async def check_payment(callback: CallbackQuery, bot: Bot) -> None:
         await callback.message.answer("Оплата подтверждена ✅ Книга уже отправлена — найди её выше в чате 📖")
         return
 
-    # Просим телефон — got_contact проверит pending_payments и доставит книгу
+    # Оплата привязана к tg_id — книга придёт автоматически, телефон не нужен
     await callback.message.answer(
-        "Поделись номером телефона — мгновенно проверю оплату и отправлю книгу:",
-        reply_markup=phone_keyboard(),
+        "Проверяю оплату… Если ты только что оплатил — книга придёт сюда автоматически в течение минуты 📖\n\n"
+        "Если через пару минут её нет — напиши @semke_ivan, отправлю вручную."
     )
 
 
