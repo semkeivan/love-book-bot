@@ -90,15 +90,24 @@ async def check_payment(callback: CallbackQuery, bot: Bot) -> None:
 
 
 async def deliver_book(bot: Bot, user_id: int) -> None:
+    # Книгу отправляем сразу (быстро), чтобы webhook мог мгновенно ответить Prodamus.
     try:
-        # Используем file_id с серверов Telegram (приоритет) или локальный файл
         document = PDF_FILE_ID if PDF_FILE_ID else FSInputFile(PDF_PATH)
         await bot.send_document(
             chat_id=user_id,
             document=document,
             caption="📎 Вот твоя книга. Сохрани её — она никуда не денется.",
         )
-        await asyncio.sleep(60)
-        await bot.send_message(user_id, POST_PURCHASE_TEXT, reply_markup=community_keyboard())
     except Exception as e:
         logger.error("Ошибка доставки книги user=%s: %s", user_id, e)
+        return
+
+    # Сообщение о сообществе — отложенно и в фоне, не блокируя ответ на webhook.
+    async def _followup() -> None:
+        await asyncio.sleep(60)
+        try:
+            await bot.send_message(user_id, POST_PURCHASE_TEXT, reply_markup=community_keyboard())
+        except Exception as e:
+            logger.warning("Followup message user=%s: %s", user_id, e)
+
+    asyncio.create_task(_followup())
