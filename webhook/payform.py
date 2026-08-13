@@ -1,3 +1,4 @@
+import json
 import logging
 from aiohttp import web
 
@@ -15,6 +16,14 @@ async def payform_webhook(request: web.Request) -> web.Response:
         logger.info("Payform webhook: status=%s phone=%s email=%s order_id=%s order_num=%s",
                     data.get("payment_status"), data.get("customer_phone"),
                     data.get("customer_email"), data.get("order_id"), data.get("order_num"))
+        # Фиксируем факт прихода уведомления в БД (для диагностики доставки)
+        try:
+            from database.crud import log_message
+            snapshot = {k: data.get(k) for k in
+                        ("payment_status", "order_num", "order_id", "customer_phone", "customer_email", "sum")}
+            await log_message(0, "PRODAMUS_WEBHOOK", "", json.dumps(snapshot, ensure_ascii=False))
+        except Exception:
+            pass
     except Exception as e:
         logger.error("Webhook parse error: %s", e)
         return web.Response(text="ok")
