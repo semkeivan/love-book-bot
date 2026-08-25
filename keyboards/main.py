@@ -29,7 +29,7 @@ def main_keyboard() -> InlineKeyboardMarkup:
     # Два выбора: сразу купить или почитать подробнее на сайте.
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💳 Купить книгу — 350 ₽", callback_data="buy")],
-        [InlineKeyboardButton(text="📖 Подробнее о книге", url="https://god-love-you.bloomcode.net/")],
+        [InlineKeyboardButton(text="📖 Подробнее о книге", url="https://god-love-you.netlify.app/")],
     ])
 
 
