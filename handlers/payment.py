@@ -75,7 +75,10 @@ async def got_contact(message: Message, bot: Bot) -> None:
 
 @router.callback_query(F.data == "check_payment")
 async def check_payment(callback: CallbackQuery, bot: Bot) -> None:
-    await callback.answer()
+    try:
+        await callback.answer()
+    except Exception:
+        pass  # сбой answer() не должен мешать выдаче книги
     user_id = callback.from_user.id
 
     if await has_paid(user_id):
