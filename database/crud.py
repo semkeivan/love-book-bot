@@ -242,6 +242,23 @@ def _pop_pending_payment_by_phone(phone: str):
         return row[1]
 
 
+def _pop_recent_pending(minutes: int = 180):
+    """Возвращает order_id самой свежей неопознанной оплаты за последние N минут и удаляет её.
+    Нужно, чтобы кнопка «Я оплатил» привязала недавнюю оплату к нажавшему."""
+    with _db() as conn:
+        cur = conn.execute(
+            "SELECT id, order_id FROM pending_payments "
+            "WHERE created_at >= datetime('now', ? || ' minutes') "
+            "ORDER BY created_at DESC LIMIT 1",
+            (f"-{minutes}",),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        conn.execute("DELETE FROM pending_payments WHERE id = ?", (row[0],))
+        return row[1]
+
+
 def _get_all_user_ids():
     with _db() as conn:
         return [r[0] for r in conn.execute("SELECT id FROM users").fetchall()]
@@ -395,6 +412,9 @@ async def save_pending_payment(phone, email, order_id):
 
 async def pop_pending_payment_by_phone(phone):
     return await asyncio.to_thread(_pop_pending_payment_by_phone, phone)
+
+async def pop_recent_pending(minutes: int = 180):
+    return await asyncio.to_thread(_pop_recent_pending, minutes)
 
 async def get_all_user_ids():
     return await asyncio.to_thread(_get_all_user_ids)

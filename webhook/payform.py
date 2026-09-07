@@ -63,5 +63,18 @@ async def payform_webhook(request: web.Request) -> web.Response:
         email = data.get("customer_email", "")
         await save_pending_payment(phone, email, order_id)
         logger.info("Оплата в pending: phone=%s email=%s order_id=%s", phone, email, order_id)
+        # Моментально уведомляем админа — чтобы оплата не потерялась
+        try:
+            from config import ADMIN_IDS
+            if ADMIN_IDS:
+                await request.app["bot"].send_message(
+                    ADMIN_IDS[0],
+                    "💰 Пришла ОПЛАТА, но бот не смог опознать покупателя автоматически.\n\n"
+                    f"Телефон: {phone or '—'}\nПочта: {email or '—'}\nЗаказ: {order_id}\n\n"
+                    "Обычно это тот, кто только что был в боте. Как он нажмёт «✅ Я оплатил» — "
+                    "книга уйдёт сама. Либо пришли мне его @username — выдам вручную.",
+                )
+        except Exception as e:
+            logger.warning("Не смог уведомить админа о pending-оплате: %s", e)
 
     return web.Response(text="ok")

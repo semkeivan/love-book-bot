@@ -7,7 +7,7 @@ from aiogram.types import (
 )
 
 from config import PDF_PATH, PDF_FILE_ID
-from database.crud import has_paid, mark_user_paid, save_phone, pop_pending_payment_by_phone
+from database.crud import has_paid, mark_user_paid, save_phone, pop_pending_payment_by_phone, pop_recent_pending
 from keyboards.main import payment_keyboard, community_keyboard
 from texts.messages import BUY_OFFER_TEXT, POST_PURCHASE_TEXT
 
@@ -82,10 +82,17 @@ async def check_payment(callback: CallbackQuery, bot: Bot) -> None:
         await callback.message.answer("Оплата подтверждена ✅ Книга уже отправлена — найди её выше в чате 📖")
         return
 
-    # Оплата привязана к tg_id — книга придёт автоматически, телефон не нужен
+    # Привязываем недавнюю неопознанную оплату к тому, кто нажал «Я оплатил»
+    order_id = await pop_recent_pending(minutes=180)
+    if order_id:
+        await mark_user_paid(user_id, tribute_id=order_id)
+        await deliver_book(bot, user_id)
+        logger.info("Книга выдана по «Я оплатил» user=%s order=%s", user_id, order_id)
+        return
+
     await callback.message.answer(
-        "Проверяю оплату… Если ты только что оплатил — книга придёт сюда автоматически в течение минуты 📖\n\n"
-        "Если через пару минут её нет — напиши @semke_ivan, отправлю вручную."
+        "Проверяю оплату… Если ты только что оплатил — нажми ещё раз через минуту, книга придёт сюда 📖\n\n"
+        "Если не пришла — напиши @semke_ivan, отправлю вручную."
     )
 
 
