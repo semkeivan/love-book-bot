@@ -16,12 +16,11 @@ async def payform_webhook(request: web.Request) -> web.Response:
         logger.info("Payform webhook: status=%s phone=%s email=%s order_id=%s order_num=%s",
                     data.get("payment_status"), data.get("customer_phone"),
                     data.get("customer_email"), data.get("order_id"), data.get("order_num"))
-        # Фиксируем факт прихода уведомления в БД (для диагностики доставки)
+        # Фиксируем ВСЕ поля уведомления в БД (для диагностики — видно, что реально шлёт Prodamus)
         try:
             from database.crud import log_message
-            snapshot = {k: data.get(k) for k in
-                        ("payment_status", "order_num", "order_id", "customer_phone", "customer_email", "sum")}
-            await log_message(0, "PRODAMUS_WEBHOOK", "", json.dumps(snapshot, ensure_ascii=False))
+            full = {k: str(data.get(k)) for k in data.keys()}
+            await log_message(0, "PRODAMUS_WEBHOOK", "", json.dumps(full, ensure_ascii=False)[:3000])
         except Exception:
             pass
     except Exception as e:
@@ -35,16 +34,26 @@ async def payform_webhook(request: web.Request) -> web.Response:
     order_num = data.get("order_num", "")  # формат: tg_<user_id>
     order_id = data.get("order_id", "")
 
-    # Сначала пробуем извлечь user_id из order_num (надёжнее телефона)
     user_id = None
-    if order_num.startswith("tg_"):
+
+    # 1) Самый надёжный способ — кастомный параметр _param_tgid (Prodamus не подменяет его)
+    tgid = data.get("_param_tgid") or data.get("param_tgid")
+    if tgid:
+        try:
+            user_id = int(str(tgid).strip())
+            logger.info("user_id из _param_tgid: %s", user_id)
+        except (ValueError, TypeError):
+            pass
+
+    # 2) Запасной — из order_num вида tg_<id>
+    if not user_id and order_num.startswith("tg_"):
         try:
             user_id = int(order_num.split("_", 1)[1])
             logger.info("user_id из order_num: %s", user_id)
         except (ValueError, IndexError):
             pass
 
-    # Фолбэк: ищем по номеру телефона
+    # 3) Фолбэк: ищем по номеру телефона
     if not user_id and phone:
         user_id = await get_user_id_by_phone(phone)
         if user_id:

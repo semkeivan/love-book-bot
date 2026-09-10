@@ -82,7 +82,9 @@ async def check_payment(callback: CallbackQuery, bot: Bot) -> None:
     user_id = callback.from_user.id
 
     if await has_paid(user_id):
-        await callback.message.answer("Оплата подтверждена ✅ Книга уже отправлена — найди её выше в чате 📖")
+        # Уже оплачено — на всякий случай отправляем книгу ещё раз (вдруг не дошла)
+        await deliver_book(bot, user_id)
+        await callback.message.answer("Оплата подтверждена ✅ Книга отправлена — найди её в чате 📖")
         return
 
     # Привязываем недавнюю неопознанную оплату к тому, кто нажал «Я оплатил»

@@ -19,6 +19,9 @@ def build_pay_url(user_id: int) -> str:
     success_url = f"https://t.me/{BOT_USERNAME}?start=paid_{user_id}_{token}"
     params = {
         "order_num": f"tg_{user_id}",
+        # Кастомный параметр Prodamus — возвращается в уведомлении без изменений,
+        # в отличие от order_num, который Prodamus подменяет своим номером.
+        "_param_tgid": str(user_id),
         "urlSuccess": success_url,
         "urlNotification": NOTIFY_URL,
     }
